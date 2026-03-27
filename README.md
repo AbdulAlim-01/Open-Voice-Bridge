@@ -1,0 +1,308 @@
+# 🔊 Open-Source TTS API
+
+A lightweight, self-hosted **Text-to-Speech REST API** powered by [Kokoro-ONNX](https://github.com/thewh1teagle/kokoro-onnx) and [Piper TTS](https://github.com/rhasspy/piper). No cloud. No API keys. Works on any device that can make an HTTP request.
+
+---
+
+## ✨ Features
+
+- **One endpoint** — POST a text chunk, get back a WAV audio file
+- **Two engines** — Kokoro-ONNX (neural, natural) and Piper (fast, lightweight)
+- **Cross-platform** — Linux, macOS, Windows (Git Bash / WSL)
+- **Cross-device** — works from any HTTP client: browser, mobile app, IoT, curl
+- **CORS open** — `Access-Control-Allow-Origin: *` by default
+- **Concurrent requests** — built-in concurrency queue (configurable)
+- **Zero dependencies on cloud** — fully offline after setup
+
+---
+
+## 📋 Prerequisites
+
+| Requirement | Version | Notes |
+|---|---|---|
+| **Node.js** | v18+ | [nodejs.org](https://nodejs.org) |
+| **Python** | 3.9+ | [python.org](https://python.org) |
+| **pip** | latest | comes with Python |
+| **curl** or **wget** | any | for setup script downloads |
+
+> **Windows users:** Use [Git Bash](https://git-scm.com/downloads) or WSL to run `setup.sh`. PowerShell is not required.
+
+---
+
+## 🚀 Installation
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/your-username/tts-api.git
+cd tts-api
+```
+
+### 2. Run the setup script
+
+The script automatically detects your OS and architecture, then downloads and configures everything.
+
+```bash
+bash setup.sh
+```
+
+This will:
+- ✅ Check Node.js and Python prerequisites
+- ✅ Download the correct **Piper binary** for your platform (Linux x86/ARM, macOS, Windows)
+- ✅ Download **Piper voices** (en_US female/male, en_GB)
+- ✅ Install **Kokoro-ONNX** Python package and its model files (~87 MB total)
+- ✅ Run `npm install`
+- ✅ Generate a `.env` file with correct paths pre-filled
+
+### 3. Start the server
+
+```bash
+node server.js
+```
+
+---
+
+## 📡 API Reference
+
+### `POST /tts` — Convert text chunk to audio
+
+**Request**
+
+```http
+POST /tts
+Content-Type: application/json
+
+{
+  "chunk": "Hello, this is a test.",
+  "voice": "af_heart",
+  "engine": "kokoro"
+}
+```
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `chunk` | string | *(required)* | The text to synthesize |
+| `voice` | string | `af_heart` | Voice ID (see `/tts/voices`) |
+| `engine` | string | `kokoro` | `"kokoro"` or `"piper"` |
+
+**Response**
+
+```
+Content-Type: audio/wav
+X-TTS-Engine: kokoro
+X-TTS-Voice: af_heart
+X-Sample-Rate: 24000
+X-Request-Id: a3f9c12
+```
+
+Returns raw WAV binary, ready to play directly.
+
+---
+
+### `GET /tts` — Browser quick test
+
+```
+GET /tts?chunk=Hello+world&voice=af_heart&engine=kokoro
+```
+
+Open in your browser address bar — audio plays directly.
+
+---
+
+### `GET /tts/voices` — List available voices
+
+```http
+GET /tts/voices
+```
+
+```json
+{
+  "piper": [
+    "en_US-hfc_female-medium",
+    "en_US-hfc_male-medium",
+    "en_US-amy-medium",
+    "en_US-ryan-high",
+    "en_GB-alan-medium"
+  ],
+  "kokoro": [
+    "af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky",
+    "am_adam", "am_michael",
+    "bf_emma", "bf_isabella", "bm_george", "bm_lewis"
+  ]
+}
+```
+
+---
+
+## 🖥️ Usage Examples
+
+### curl
+
+```bash
+curl -X POST http://localhost:3000/tts \
+  -H "Content-Type: application/json" \
+  -d '{"chunk": "Hello world", "voice": "af_heart", "engine": "kokoro"}' \
+  --output hello.wav
+```
+
+### JavaScript (fetch)
+
+```js
+const response = await fetch("http://localhost:3000/tts", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ chunk: "Hello world", voice: "af_heart", engine: "kokoro" }),
+});
+
+const blob = await response.blob();
+const url  = URL.createObjectURL(blob);
+const audio = new Audio(url);
+audio.play();
+```
+
+### Python
+
+```python
+import requests
+
+res = requests.post("http://localhost:3000/tts", json={
+    "chunk": "Hello world",
+    "voice": "af_heart",
+    "engine": "kokoro"
+})
+
+with open("hello.wav", "wb") as f:
+    f.write(res.content)
+```
+
+### React Native / Mobile
+
+```js
+const response = await fetch("http://YOUR_SERVER_IP:3000/tts", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ chunk: text, voice: "af_heart" }),
+});
+const blob  = await response.blob();
+// pass blob to your audio player
+```
+
+---
+
+## ⚙️ Configuration (`.env`)
+
+After setup, a `.env` file is generated in the project root. Edit it to customize:
+
+```env
+# Engine to use by default (kokoro | piper)
+TTS_ENGINE=kokoro
+
+# Kokoro
+PYTHON_PATH=python3
+KOKORO_VOICE=af_heart
+KOKORO_SAMPLE_RATE=24000
+KOKORO_SCRIPT=./engines/kokoro/kokoro_tts.py
+
+# Piper
+PIPER_PATH=./engines/piper/piper
+PIPER_VOICES=./engines/piper/voices
+PIPER_SAMPLE_RATE=22050
+
+# Server
+PORT=3000
+TTS_CONCURRENCY=5   # max parallel TTS processes
+```
+
+---
+
+## 📁 Project Structure
+
+```
+tts-api/
+├── server.js           ← Express entry point (attach initTTS here)
+├── ttsroute.js         ← TTS route (this file)
+├── setup.sh            ← One-shot installer
+├── .env                ← Generated by setup.sh
+├── package.json
+└── engines/
+    ├── piper/
+    │   ├── piper           ← Piper binary (Linux/macOS)
+    │   ├── piper.exe       ← Piper binary (Windows)
+    │   └── voices/
+    │       ├── en_US-hfc_female-medium.onnx
+    │       ├── en_US-hfc_female-medium.onnx.json
+    │       └── ...
+    └── kokoro/
+        ├── kokoro_tts.py
+        ├── kokoro-v0_19.onnx
+        └── voices.bin
+```
+
+---
+
+## 🔧 Integrating into an existing Express app
+
+```js
+// server.js
+import express    from "express";
+import http       from "http";
+import { initTTS } from "./ttsroute.js";
+
+const app    = express();
+const server = http.createServer(app);
+
+app.use(express.json());
+
+initTTS(app);  // registers /tts, /tts/voices
+
+server.listen(process.env.PORT || 3000, () => {
+  console.log(`Server running on port ${process.env.PORT || 3000}`);
+});
+```
+
+---
+
+## 🌐 Deploying publicly
+
+To expose the API from any network:
+
+```bash
+# Using a reverse proxy (nginx example)
+location /tts {
+    proxy_pass http://localhost:3000;
+}
+```
+
+Or use [ngrok](https://ngrok.com) for quick public tunnelling:
+
+```bash
+ngrok http 3000
+```
+
+---
+
+## 🤝 Contributing
+
+PRs welcome! To add a new voice engine, implement a function matching:
+
+```js
+async function myEngineTTS(text, voice) {
+  // returns Buffer of raw PCM int16 samples
+}
+```
+
+Then register it in `textToAudio()` and add the sample rate to `getSampleRate()`.
+
+---
+
+## 📄 License
+
+MIT — use freely in personal and commercial projects.
+
+---
+
+## 🙏 Credits
+
+- [Piper TTS](https://github.com/rhasspy/piper) by rhasspy
+- [Kokoro-ONNX](https://github.com/thewh1teagle/kokoro-onnx) by thewh1teagle
+- [Kokoro-82M model](https://huggingface.co/hexgrad/Kokoro-82M) by hexgrad
